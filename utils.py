@@ -2,12 +2,13 @@
 import tensorflow as tf
 from tensorflow.python.ops import lookup_ops
 import numpy as np
+import collections
 
 src_file = 'resource/source.txt'
 tgt_file = 'resource/target.txt'
 src_vocab_file = 'resource/source_vocab.txt'
 tgt_vocab_file = 'resource/target_vocab.txt'
-word_embedding_file = '../resource/wiki.zh.vec'
+word_embedding_file = 'resource/wiki.zh.vec'
 PADDING_ID = -1
 UNK_ID = -2
 '''
@@ -15,6 +16,15 @@ reverse_tgt_vocab_table = lookup_ops.index_to_string_table_from_file(
         tgt_vocab_file, default_value=vocab_utils.UNK)
 inference.py 56:line
 '''
+
+class BatchedInput(collections.namedtuple("BatchedInput",
+                                          ("initializer",
+                                           "source",
+                                           "target_input",
+                                           "source_sequence_length",
+                                           "target_sequence_length"))):
+  pass
+
 def create_vocab_tables(src_vocab_file, tgt_vocab_file, share_vocab=False):
   src_vocab_table = lookup_ops.index_table_from_file(
       src_vocab_file, default_value=UNK_ID)
@@ -103,35 +113,40 @@ def get_iterator(batch_size, buffer_size=None, random_seed=None, num_threads=1,
     batched_dataset = src_tgt_dataset.group_by_window(
         key_func=key_func, reduce_func=reduce_func, window_size=batch_size)
 
-    iterator = batched_dataset.make_initializable_iterator()
-    return iterator
+    batched_iter = batched_dataset.make_initializable_iterator()
+    (src_ids, tgt_input_ids, src_seq_len, tgt_seq_len) = (
+        batched_iter.get_next())
+
+    return BatchedInput(
+        initializer=batched_iter.initializer,
+        source=src_ids,
+        target_input=tgt_input_ids,
+        source_sequence_length=src_seq_len,
+        target_sequence_length=tgt_seq_len)
 
 
-def load_word2vec_embedding(path=W2V_PATH):
+def load_word2vec_embedding():
     '''
         加载外接的词向量。
-        :param path:
         :return:
     '''
     embeddings_index = {}
-    f = open(path)
+    f = open(word_embedding_file)
     for line in f:
         values = line.split()
         word = values[0]  # 取词
         coefs = np.asarray(values[1:], dtype='float32')  # 取向量
+        # TODO: 用ID代替字，以便look up
+
         embeddings_index[word] = coefs  # 将词和对应的向量存到字典里
     f.close()
-    return embeddings_index
+    return tf.Variable(embeddings_index)
 
 
 if __name__ == '__main__':
     iterator = get_iterator(3)
-    next_element = iterator.get_next()
     with tf.Session() as sess:
         sess.run(iterator.initializer)
         tf.tables_initializer().run()
-        result = sess.run(next_element)
-        for batch in result:
-            for e in batch:
-                print e
-            print '*' * 100
+        result = sess.run([iterator.source, iterator.source_sequence_length])
+        print result
