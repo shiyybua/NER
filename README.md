@@ -1,0 +1,3 @@
+# NER
+一个中文的实体命名识别系统
+Busy Day! I am working on it...
