@@ -1,11 +1,13 @@
 # -*- coding: utf-8 -*
 import tensorflow as tf
 from tensorflow.python.ops import lookup_ops
+import numpy as np
 
 src_file = 'resource/source.txt'
 tgt_file = 'resource/target.txt'
 src_vocab_file = 'resource/source_vocab.txt'
 tgt_vocab_file = 'resource/target_vocab.txt'
+word_embedding_file = '../resource/wiki.zh.vec'
 PADDING_ID = -1
 UNK_ID = -2
 '''
@@ -103,6 +105,23 @@ def get_iterator(batch_size, buffer_size=None, random_seed=None, num_threads=1,
 
     iterator = batched_dataset.make_initializable_iterator()
     return iterator
+
+
+def load_word2vec_embedding(path=W2V_PATH):
+    '''
+        加载外接的词向量。
+        :param path:
+        :return:
+    '''
+    embeddings_index = {}
+    f = open(path)
+    for line in f:
+        values = line.split()
+        word = values[0]  # 取词
+        coefs = np.asarray(values[1:], dtype='float32')  # 取向量
+        embeddings_index[word] = coefs  # 将词和对应的向量存到字典里
+    f.close()
+    return embeddings_index
 
 
 if __name__ == '__main__':
