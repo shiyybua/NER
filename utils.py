@@ -3,16 +3,16 @@ import tensorflow as tf
 from tensorflow.python.ops import lookup_ops
 import numpy as np
 import collections
-import time
 
 src_file = 'resource/source.txt'
 tgt_file = 'resource/target.txt'
 src_vocab_file = 'resource/source_vocab.txt'
 tgt_vocab_file = 'resource/target_vocab.txt'
 word_embedding_file = 'resource/wiki.zh.vec'
-embeddings_size = 30
-PADDING_ID = -1
-UNK_ID = -2
+embeddings_size = 300
+max_sequence = 100
+# PADDING_ID = -1
+# UNK_ID = -2
 '''
 reverse_tgt_vocab_table = lookup_ops.index_to_string_table_from_file(
         tgt_vocab_file, default_value=vocab_utils.UNK)
@@ -38,6 +38,20 @@ def get_src_vocab_size():
     return size
 
 
+def get_class_size():
+    '''
+        获取命名实体识别类别总数。
+    :return:
+    '''
+    size = 0
+    with open(tgt_vocab_file, 'r') as vocab_file:
+        for content in vocab_file.readlines():
+            content = content.strip()
+            if content != '':
+                size += 1
+    return size
+
+
 def create_vocab_tables(src_vocab_file, tgt_vocab_file, src_unknown_id, tgt_unknown_id, share_vocab=False):
   src_vocab_table = lookup_ops.index_table_from_file(
       src_vocab_file, default_value=src_unknown_id)
@@ -49,8 +63,8 @@ def create_vocab_tables(src_vocab_file, tgt_vocab_file, src_unknown_id, tgt_unkn
   return src_vocab_table, tgt_vocab_table
 
 
-def get_iterator(src_vocab_table, tgt_vocab_table, batch_size, buffer_size=None, random_seed=None, num_threads=1,
-                 src_max_len=100, tgt_max_len=100, num_buckets=5):
+def get_iterator(src_vocab_table, tgt_vocab_table, vocab_size, batch_size, buffer_size=None, random_seed=None,
+                 num_threads=1, src_max_len=max_sequence, tgt_max_len=max_sequence, num_buckets=5):
     if buffer_size is None:
         buffer_size = batch_size * 1000
 
@@ -105,8 +119,8 @@ def get_iterator(src_vocab_table, tgt_vocab_table, batch_size, buffer_size=None,
             # Pad the source and target sequences with eos tokens.
             # (Though notice we don't generally need to do this since
             # later on we will be masking out calculations past the true sequence.
-            padding_values=(PADDING_ID,  # src
-                            PADDING_ID,  # tgt_input
+            padding_values=(vocab_size+1,  # src
+                            vocab_size+1,  # tgt_input
                             0,  # src_len -- unused
                             0))
 
@@ -146,8 +160,8 @@ def load_word2vec_embedding(vocab_size):
     embeddings = np.random.uniform(-1,1,(vocab_size + 2, embeddings_size))
     # 保证每次随机出来的数一样。
     rng = np.random.RandomState(23455)
-    unknown = rng.normal(size=(embeddings_size))
-    padding = rng.normal(size=(embeddings_size))
+    unknown = np.asarray(rng.normal(size=(embeddings_size)))
+    padding = np.asarray(rng.normal(size=(embeddings_size)))
     f = open(word_embedding_file)
     for index, line in enumerate(f):
         values = line.split()
@@ -159,7 +173,8 @@ def load_word2vec_embedding(vocab_size):
     embeddings[-1] = padding
 
     return tf.get_variable("embeddings", dtype=tf.float32,
-                           shape=[vocab_size, embeddings_size], initializer=tf.constant_initializer(embeddings), trainable=False)
+                           shape=[vocab_size + 2, embeddings_size],
+                           initializer=tf.constant_initializer(embeddings), trainable=False)
 
 
 if __name__ == '__main__':
@@ -168,16 +183,15 @@ if __name__ == '__main__':
     src_padding = vocab_size + 1
 
     src_vocab_table, tgt_vocab_table = create_vocab_tables(src_vocab_file, tgt_vocab_file, src_unknown_id, tgt_unknown_id)
-    iterator = get_iterator(src_vocab_table, tgt_vocab_table, 3)
-    embedding = load_word2vec_embedding()
-    print 'loaded'
-    x = tf.nn.embedding_lookup(embedding, [1,2,3])
+    iterator = get_iterator(src_vocab_table, tgt_vocab_table, vocab_size, 1)
+    embedding = load_word2vec_embedding(vocab_size)
 
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
         sess.run(iterator.initializer)
         tf.tables_initializer().run()
-
         result = sess.run(iterator.source)
+
+        print sess.run(tf.nn.embedding_lookup(embedding, result)).shape
         print result
-        print sess.run(x).shape
+        print sess.run(iterator.target_input)
