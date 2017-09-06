@@ -1,4 +1,6 @@
+# -*- coding: utf-8 -*
 CORPUS_PATH = 'corpus.txt'
+import numpy as np
 
 
 def build_corpus():
@@ -52,4 +54,15 @@ def build_word_index():
                 s_vocab.write(word + '\n')
 
 
-build_word_index()
+def build_word_index_from_w2v():
+    with open('source_vocab.txt', 'w') as source:
+        f = open('wiki.zh.vec')
+        for line in f:
+            values = line.split()
+            word = values[0]  # 取词
+            if type(word) is unicode:
+                word = word.encode('utf8')
+            source.write(word + '\n')
+    f.close()
+
+build_word_index_from_w2v()

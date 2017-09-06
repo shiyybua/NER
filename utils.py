@@ -3,12 +3,14 @@ import tensorflow as tf
 from tensorflow.python.ops import lookup_ops
 import numpy as np
 import collections
+import time
 
 src_file = 'resource/source.txt'
 tgt_file = 'resource/target.txt'
 src_vocab_file = 'resource/source_vocab.txt'
 tgt_vocab_file = 'resource/target_vocab.txt'
 word_embedding_file = 'resource/wiki.zh.vec'
+embeddings_size = 30
 PADDING_ID = -1
 UNK_ID = -2
 '''
@@ -25,23 +27,33 @@ class BatchedInput(collections.namedtuple("BatchedInput",
                                            "target_sequence_length"))):
   pass
 
-def create_vocab_tables(src_vocab_file, tgt_vocab_file, share_vocab=False):
+
+def get_src_vocab_size():
+    size = 0
+    with open(src_vocab_file, 'r') as vocab_file:
+        for content in vocab_file.readlines():
+            content = content.strip()
+            if content != '':
+                size += 1
+    return size
+
+
+def create_vocab_tables(src_vocab_file, tgt_vocab_file, src_unknown_id, tgt_unknown_id, share_vocab=False):
   src_vocab_table = lookup_ops.index_table_from_file(
-      src_vocab_file, default_value=UNK_ID)
+      src_vocab_file, default_value=src_unknown_id)
   if share_vocab:
     tgt_vocab_table = src_vocab_table
   else:
     tgt_vocab_table = lookup_ops.index_table_from_file(
-        tgt_vocab_file, default_value=UNK_ID)
+        tgt_vocab_file, default_value=tgt_unknown_id)
   return src_vocab_table, tgt_vocab_table
 
 
-def get_iterator(batch_size, buffer_size=None, random_seed=None, num_threads=1,
+def get_iterator(src_vocab_table, tgt_vocab_table, batch_size, buffer_size=None, random_seed=None, num_threads=1,
                  src_max_len=100, tgt_max_len=100, num_buckets=5):
     if buffer_size is None:
         buffer_size = batch_size * 1000
-    src_vocab_table, tgt_vocab_table = create_vocab_tables(
-        src_vocab_file, tgt_vocab_file)
+
     src_dataset = tf.contrib.data.TextLineDataset(src_file)
     tgt_dataset = tf.contrib.data.TextLineDataset(tgt_file)
     src_tgt_dataset = tf.contrib.data.Dataset.zip((src_dataset, tgt_dataset))
@@ -125,28 +137,47 @@ def get_iterator(batch_size, buffer_size=None, random_seed=None, num_threads=1,
         target_sequence_length=tgt_seq_len)
 
 
-def load_word2vec_embedding():
+def load_word2vec_embedding(vocab_size):
     '''
         加载外接的词向量。
         :return:
     '''
-    embeddings_index = {}
+    print 'loading word embedding, it will take few minutes...'
+    embeddings = np.random.uniform(-1,1,(vocab_size + 2, embeddings_size))
+    # 保证每次随机出来的数一样。
+    rng = np.random.RandomState(23455)
+    unknown = rng.normal(size=(embeddings_size))
+    padding = rng.normal(size=(embeddings_size))
     f = open(word_embedding_file)
-    for line in f:
+    for index, line in enumerate(f):
         values = line.split()
-        word = values[0]  # 取词
         coefs = np.asarray(values[1:], dtype='float32')  # 取向量
-        # TODO: 用ID代替字，以便look up
-
-        embeddings_index[word] = coefs  # 将词和对应的向量存到字典里
+        embeddings[index] = coefs   # 将词和对应的向量存到字典里
     f.close()
-    return tf.Variable(embeddings_index)
+    # 顺序不能错，这个和unkown_id和padding id需要一一对应。
+    embeddings[-2] = unknown
+    embeddings[-1] = padding
+
+    return tf.get_variable("embeddings", dtype=tf.float32,
+                           shape=[vocab_size, embeddings_size], initializer=tf.constant_initializer(embeddings), trainable=False)
 
 
 if __name__ == '__main__':
-    iterator = get_iterator(3)
+    vocab_size = get_src_vocab_size()
+    src_unknown_id = tgt_unknown_id = vocab_size
+    src_padding = vocab_size + 1
+
+    src_vocab_table, tgt_vocab_table = create_vocab_tables(src_vocab_file, tgt_vocab_file, src_unknown_id, tgt_unknown_id)
+    iterator = get_iterator(src_vocab_table, tgt_vocab_table, 3)
+    embedding = load_word2vec_embedding()
+    print 'loaded'
+    x = tf.nn.embedding_lookup(embedding, [1,2,3])
+
     with tf.Session() as sess:
+        sess.run(tf.global_variables_initializer())
         sess.run(iterator.initializer)
         tf.tables_initializer().run()
-        result = sess.run([iterator.source, iterator.source_sequence_length])
+
+        result = sess.run(iterator.source)
         print result
+        print sess.run(x).shape
