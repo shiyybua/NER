@@ -11,7 +11,7 @@ tgt_vocab_file = 'resource/target_vocab.txt'
 word_embedding_file = 'resource/wiki.zh.vec'
 embeddings_size = 300
 max_sequence = 100
-# PADDING_ID = -1
+
 # UNK_ID = -2
 '''
 reverse_tgt_vocab_table = lookup_ops.index_to_string_table_from_file(
@@ -49,8 +49,10 @@ def get_class_size():
             content = content.strip()
             if content != '':
                 size += 1
-    return size
+    # 最后一个是padding
+    return size + 1
 
+TAG_PADDING_ID = get_class_size() - 1
 
 def create_vocab_tables(src_vocab_file, tgt_vocab_file, src_unknown_id, tgt_unknown_id, share_vocab=False):
   src_vocab_table = lookup_ops.index_table_from_file(
@@ -120,7 +122,7 @@ def get_iterator(src_vocab_table, tgt_vocab_table, vocab_size, batch_size, buffe
             # (Though notice we don't generally need to do this since
             # later on we will be masking out calculations past the true sequence.
             padding_values=(vocab_size+1,  # src
-                            vocab_size+1,  # tgt_input
+                            TAG_PADDING_ID,  # tgt_input
                             0,  # src_len -- unused
                             0))
 
@@ -183,15 +185,22 @@ if __name__ == '__main__':
     src_padding = vocab_size + 1
 
     src_vocab_table, tgt_vocab_table = create_vocab_tables(src_vocab_file, tgt_vocab_file, src_unknown_id, tgt_unknown_id)
-    iterator = get_iterator(src_vocab_table, tgt_vocab_table, vocab_size, 1)
-    embedding = load_word2vec_embedding(vocab_size)
+    iterator = get_iterator(src_vocab_table, tgt_vocab_table, vocab_size, 100, random_seed=None)
 
+    record = []
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
         sess.run(iterator.initializer)
         tf.tables_initializer().run()
-        result = sess.run(iterator.source)
+        for i in range(1000):
+            try:
+                source, target = sess.run([iterator.source, iterator.target_input])
+                if i == 0:
+                    print source[0][:10]
+                # print i, source.shape, target.shape
+            except tf.errors.OutOfRangeError:
+                sess.run(iterator.initializer)
+                source, target = sess.run([iterator.source, iterator.target_input])
+                print source[0][:10]
 
-        print sess.run(tf.nn.embedding_lookup(embedding, result)).shape
-        print result
-        print sess.run(iterator.target_input)
+

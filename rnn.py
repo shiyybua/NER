@@ -22,6 +22,10 @@ class NER_net:
     def _build_net(self):
         source = self.iterator.source
         tgt = self.iterator.target_input
+        max_sequence_in_batch = self.iterator.source_sequence_length
+        max_sequence_in_batch = tf.reduce_max(max_sequence_in_batch)
+        max_sequence_in_batch = tf.to_int32(max_sequence_in_batch)
+        # max_sequence_in_batch = tf.constant(100)
 
         # x: [batch_size, time_step, embedding_size], float32
         self.x = tf.nn.embedding_lookup(self.embedding, source)
@@ -44,36 +48,22 @@ class NER_net:
         outputs = tf.concat([forward_out, backward_out], axis=2)
         print outputs
 
-        rnn_features = tf.transpose(outputs, [1, 0, 2])
-        rnn_features = tf.reshape(rnn_features, [-1, 2 * unit_num])
-
-        # CNN
-        # You could use more advanced kernel, which is introduced in
-        # https://github.com/tensorflow/models/blob/master/tutorials/image/cifar10/cifar10.py
-        filter_deep = 2  # 推荐2 或 1   # 值越大，CNN特征占的比例就越多。 如果是2表示CNN的特征和bi-rnn的特征数量一样。
-        cnn_W = tf.get_variable("cnn_w", shape=[time_step, 3, 1, filter_deep])
-        cnn_b = tf.get_variable("cnn_b", shape=[filter_deep])
-        # it is better to make the units number equal to the RNN unit number
-        # cnn_input : (batch_size, time_step, unit_num, 1)
-        cnn_input = tf.expand_dims(self.x, axis=3)
-        # conv_features : (batch_size, time_step, unit_num, 2)
-        conv_features = tf.nn.conv2d(cnn_input, cnn_W, strides=[1, 1, 1, 1], padding='SAME') + cnn_b
-        if DROPOUT_RATE is not None:
-            conv_features = tf.nn.dropout(conv_features, keep_prob=DROPOUT_RATE)
-        conv_features = tf.reshape(conv_features, [-1, unit_num * filter_deep])
-
-        all_feature = tf.concat([rnn_features, conv_features], axis=1)
-
         # projection:
-        W = tf.get_variable("projection_w", [(filter_deep + 2) * unit_num, TAGS_NUM])  # 这里的2是指bi-rnn，所以是个常量
+        W = tf.get_variable("projection_w", [2 * unit_num, TAGS_NUM])
         b = tf.get_variable("projection_b", [TAGS_NUM])
-        projection = tf.matmul(all_feature, W) + b
+        x_reshape = tf.reshape(outputs, [-1, 2 * unit_num])
+        projection = tf.matmul(x_reshape, W) + b
 
-        self.outputs = tf.reshape(projection, [-1, time_step, TAGS_NUM])
-        # self.outputs = tf.transpose(output, [1,0,2]) #BATCH_SIZE * time_step * TAGS_NUM
+        # -1 to time step
+        output = tf.reshape(projection, [-1, self.batch_size, TAGS_NUM])
+        self.outputs = tf.transpose(output, [1, 0, 2])  # BATCH_SIZE * time_step * TAGS_NUM
+        print 'outputs:', self.outputs
+        print 'y:', self.y
+        print max_sequence_in_batch
 
+        self.seq_length = tf.convert_to_tensor(self.batch_size * [max_sequence_in_batch], dtype=tf.int32)
         self.log_likelihood, self.transition_params = tf.contrib.crf.crf_log_likelihood(
-            self.outputs, self.y, np.array(self.batch_size * [time_step]))
+            self.outputs, self.y, self.seq_length)
 
         # Add a training op to tune the parameters.
         self.loss = tf.reduce_mean(-self.log_likelihood)
@@ -97,7 +87,27 @@ if __name__ == '__main__':
         tf.tables_initializer().run()
 
         for i in range(10000):
-            tf_unary_scores, tf_transition_params, _, losses = sess.run(
-                [net.outputs, net.transition_params, net.train_op, net.loss])
-            if i % 100 == 0:
-                print losses
+            print '*' * 100
+            # tf_unary_scores, tf_transition_params, _, losses = sess.run(
+            #     [net.outputs, net.transition_params, net.train_op, net.loss])
+            # try:
+            seq_length, x, y= sess.run(
+                [net.seq_length, net.x, net.y])
+
+            print i
+            print 'seq_length:',seq_length
+            print 'x:',x.shape
+            # print 'outputs:',outputs.shape
+            print 'y:', y.shape
+            # print i, 'loss', losses
+            print '*' * 100
+            # except Exception, e:
+            #     print 'break'
+            #     print str(Exception)
+            #     print str(e)
+            #     print 'seq_length:',seq_length
+            #     print 'x:',x.shape
+            #     print 'outputs:',outputs.shape
+            #     print 'y:', y.shape
+            #     break
+
