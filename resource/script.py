@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*
 CORPUS_PATH = 'corpus.txt'
-import numpy as np
+import jieba
 
 
 def build_corpus():
@@ -65,4 +65,17 @@ def build_word_index_from_w2v():
             source.write(word + '\n')
     f.close()
 
-build_word_index_from_w2v()
+def tokenizer():
+    sentence = []
+    with open('predict.txt', 'r') as f:
+        for line in f.readlines():
+            line = line.strip()
+            words = [word.encode('utf8') for word in jieba.cut(line)]
+            sentence.append(' '.join(words))
+
+    with open('predict.txt', 'w') as f:
+        for line in sentence:
+            f.write(line + '\n')
+
+
+tokenizer()

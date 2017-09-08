@@ -6,9 +6,12 @@ import collections
 
 src_file = 'resource/source.txt'
 tgt_file = 'resource/target.txt'
+# 只有在预测结果时使用。
+pred_file = 'resource/predict.txt'
 src_vocab_file = 'resource/source_vocab.txt'
 tgt_vocab_file = 'resource/target_vocab.txt'
 word_embedding_file = 'resource/wiki.zh.vec'
+model_path = 'resource/model/'
 embeddings_size = 300
 max_sequence = 100
 
@@ -155,6 +158,38 @@ def get_iterator(src_vocab_table, tgt_vocab_table, vocab_size, batch_size, buffe
         target_sequence_length=tgt_seq_len)
 
 
+def get_predict_iterator(src_vocab_table, vocab_size, batch_size, max_len=max_sequence):
+    pred_dataset = tf.contrib.data.TextLineDataset(pred_file)
+    pred_dataset = pred_dataset.map(
+        lambda src: tf.string_split([src]).values)
+    if max_len:
+        pred_dataset = pred_dataset.map(lambda src: src[:max_sequence])
+
+    pred_dataset = pred_dataset.map(
+        lambda src: tf.cast(src_vocab_table.lookup(src), tf.int32))
+
+    pred_dataset = pred_dataset.map(lambda src: (src, tf.size(src)))
+
+    def batching_func(x):
+        return x.padded_batch(
+            batch_size,
+            padded_shapes=(tf.TensorShape([None]),  # src
+                           tf.TensorShape([])),  # src_len
+            padding_values=(vocab_size+1,  # src
+                            0))  # src_len -- unused
+
+    batched_dataset = batching_func(pred_dataset)
+    batched_iter = batched_dataset.make_initializable_iterator()
+    (src_ids, src_seq_len) = batched_iter.get_next()
+
+    return BatchedInput(
+        initializer=batched_iter.initializer,
+        source=src_ids,
+        target_input=None,
+        source_sequence_length=src_seq_len,
+        target_sequence_length=None)
+
+
 def load_word2vec_embedding(vocab_size):
     '''
         加载外接的词向量。
@@ -188,26 +223,30 @@ def load_word2vec_embedding(vocab_size):
 
 
 if __name__ == '__main__':
+    #################### Just for testing #########################
     vocab_size = get_src_vocab_size()
     src_unknown_id = tgt_unknown_id = vocab_size
     src_padding = vocab_size + 1
 
     src_vocab_table, tgt_vocab_table = create_vocab_tables(src_vocab_file, tgt_vocab_file, src_unknown_id, tgt_unknown_id)
-    iterator = get_iterator(src_vocab_table, tgt_vocab_table, vocab_size, 100, random_seed=None)
+    # iterator = get_iterator(src_vocab_table, tgt_vocab_table, vocab_size, 100, random_seed=None)
 
-    record = []
+    iterator = get_predict_iterator(src_vocab_table, vocab_size, 1)
+
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
         sess.run(iterator.initializer)
         tf.tables_initializer().run()
-        for i in range(1000):
+        for i in range(100):
             try:
-                source, target = sess.run([iterator.source, iterator.target_input])
+                # source, target = sess.run([iterator.source, iterator.target_input])
+                source = sess.run(iterator.source)
                 print source.shape, source[0][:5]
                 # print i, source.shape, target.shape
             except tf.errors.OutOfRangeError:
                 sess.run(iterator.initializer)
-                source, target = sess.run([iterator.source, iterator.target_input])
+                # source, target = sess.run([iterator.source, iterator.target_input])
+                source = sess.run(iterator.source)
                 print 'new:', source.shape, source[0][:5]
 
 
