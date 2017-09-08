@@ -66,9 +66,11 @@ def create_vocab_tables(src_vocab_file, tgt_vocab_file, src_unknown_id, tgt_unkn
 
 
 def get_iterator(src_vocab_table, tgt_vocab_table, vocab_size, batch_size, buffer_size=None, random_seed=None,
-                 num_threads=1, src_max_len=max_sequence, tgt_max_len=max_sequence, num_buckets=5):
+                 num_threads=8, src_max_len=max_sequence, tgt_max_len=max_sequence, num_buckets=5):
     if buffer_size is None:
-        buffer_size = batch_size * 1000
+        # 如果buffer_size比总数据大很多，则会报End of sequence warning。
+        # https://github.com/tensorflow/tensorflow/issues/12414
+        buffer_size = batch_size * 10
 
     src_dataset = tf.contrib.data.TextLineDataset(src_file)
     tgt_dataset = tf.contrib.data.TextLineDataset(tgt_file)
@@ -83,8 +85,8 @@ def get_iterator(src_vocab_table, tgt_vocab_table, vocab_size, batch_size, buffe
         num_threads=num_threads,
         output_buffer_size=buffer_size)
 
-    src_tgt_dataset = src_tgt_dataset.filter(
-        lambda src, tgt: tf.logical_and(tf.size(src) > 0, tf.size(tgt) > 0))
+    # src_tgt_dataset = src_tgt_dataset.filter(
+    #     lambda src, tgt: tf.logical_and(tf.size(src) > 0, tf.size(tgt) > 0))
 
     if src_max_len:
         src_tgt_dataset = src_tgt_dataset.map(
@@ -167,7 +169,13 @@ def load_word2vec_embedding(vocab_size):
     f = open(word_embedding_file)
     for index, line in enumerate(f):
         values = line.split()
-        coefs = np.asarray(values[1:], dtype='float32')  # 取向量
+        try:
+            coefs = np.asarray(values[1:], dtype='float32')  # 取向量
+        except ValueError:
+            # 如果真的这个词出现在了训练数据里，这么做就会有潜在的bug。那coefs的值就是上一轮的值。
+            # 这个数据集中“蔚村”这个单词数据异常，但是词极少用到，所以可以忽略。
+            print values[0], values[1:]
+
         embeddings[index] = coefs   # 将词和对应的向量存到字典里
     f.close()
     # 顺序不能错，这个和unkown_id和padding id需要一一对应。
@@ -195,12 +203,11 @@ if __name__ == '__main__':
         for i in range(1000):
             try:
                 source, target = sess.run([iterator.source, iterator.target_input])
-                if i == 0:
-                    print source[0][:10]
+                print source.shape, source[0][:5]
                 # print i, source.shape, target.shape
             except tf.errors.OutOfRangeError:
                 sess.run(iterator.initializer)
                 source, target = sess.run([iterator.source, iterator.target_input])
-                print source[0][:10]
+                print 'new:', source.shape, source[0][:5]
 
 

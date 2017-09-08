@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*
+# import os
+# os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 from tensorflow.contrib.rnn import DropoutWrapper
 from utils import *
 
@@ -6,8 +8,8 @@ from utils import *
 BATCH_SIZE = 128
 unit_num = embeddings_size         # 默认词向量的大小等于RNN(每个time step) 和 CNN(列) 中神经单元的个数, 为了避免混淆model中全部用unit_num表示。
 time_step = max_sequence      # 每个句子的最大长度和time_step一样,为了避免混淆model中全部用time_step表示。
-DROPOUT_RATE = 0.5
-EPOCH = 60000
+DROPOUT_RATE = 0.6
+EPOCH = 10000
 TAGS_NUM = get_class_size()
 
 
@@ -46,7 +48,6 @@ class NER_net:
 
         forward_out, backward_out = outputs
         outputs = tf.concat([forward_out, backward_out], axis=2)
-        print outputs
 
         # projection:
         W = tf.get_variable("projection_w", [2 * unit_num, TAGS_NUM])
@@ -55,8 +56,7 @@ class NER_net:
         projection = tf.matmul(x_reshape, W) + b
 
         # -1 to time step
-        output = tf.reshape(projection, [-1, self.batch_size, TAGS_NUM])
-        self.outputs = tf.transpose(output, [1, 0, 2])  # BATCH_SIZE * time_step * TAGS_NUM
+        self.outputs = tf.reshape(projection, [self.batch_size, -1, TAGS_NUM])
         print 'outputs:', self.outputs
         print 'y:', self.y
         print max_sequence_in_batch
@@ -86,28 +86,20 @@ if __name__ == '__main__':
         sess.run(iterator.initializer)
         tf.tables_initializer().run()
 
-        for i in range(10000):
-            print '*' * 100
-            # tf_unary_scores, tf_transition_params, _, losses = sess.run(
-            #     [net.outputs, net.transition_params, net.train_op, net.loss])
-            # try:
-            seq_length, x, y= sess.run(
-                [net.seq_length, net.x, net.y])
+        for i in range(EPOCH):
+            try:
+                tf_unary_scores, tf_transition_params, _, losses = sess.run(
+                    [net.outputs, net.transition_params, net.train_op, net.loss])
 
-            print i
-            print 'seq_length:',seq_length
-            print 'x:',x.shape
-            # print 'outputs:',outputs.shape
-            print 'y:', y.shape
-            # print i, 'loss', losses
-            print '*' * 100
-            # except Exception, e:
-            #     print 'break'
-            #     print str(Exception)
-            #     print str(e)
-            #     print 'seq_length:',seq_length
-            #     print 'x:',x.shape
-            #     print 'outputs:',outputs.shape
-            #     print 'y:', y.shape
-            #     break
+                if i % 100 == 0:
+                    print '*' * 100
+                    print i, 'loss', losses
+                    print '*' * 100
+
+            except tf.errors.OutOfRangeError:
+                sess.run(iterator.initializer)
+            except tf.errors.InvalidArgumentError:
+                print i, ' iterator.next() cannot get enough data to a batch, initialize it.'
+                sess.run(iterator.initializer)
+
 
