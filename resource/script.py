@@ -65,6 +65,7 @@ def build_word_index_from_w2v():
             source.write(word + '\n')
     f.close()
 
+
 def tokenizer():
     sentence = []
     with open('predict.txt', 'r') as f:

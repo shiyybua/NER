@@ -3,24 +3,20 @@ import tensorflow as tf
 from tensorflow.python.ops import lookup_ops
 import numpy as np
 import collections
+import config
 
-src_file = 'resource/source.txt'
-tgt_file = 'resource/target.txt'
+src_file = config.FLAGS.src_file
+tgt_file = config.FLAGS.tgt_file
 # 只有在预测结果时使用。
-pred_file = 'resource/predict.txt'
-src_vocab_file = 'resource/source_vocab.txt'
-tgt_vocab_file = 'resource/target_vocab.txt'
-word_embedding_file = 'resource/wiki.zh.vec'
-model_path = 'resource/model/'
-embeddings_size = 300
-max_sequence = 100
+pred_file = config.FLAGS.pred_file
+src_vocab_file = config.FLAGS.src_vocab_file
+tgt_vocab_file = config.FLAGS.tgt_vocab_file
+word_embedding_file = config.FLAGS.word_embedding_file
+model_path = config.FLAGS.model_path
+embeddings_size = config.FLAGS.embeddings_size
+max_sequence = config.FLAGS.max_sequence
 
-# UNK_ID = -2
-'''
-reverse_tgt_vocab_table = lookup_ops.index_to_string_table_from_file(
-        tgt_vocab_file, default_value=vocab_utils.UNK)
-inference.py 56:line
-'''
+
 
 class BatchedInput(collections.namedtuple("BatchedInput",
                                           ("initializer",
@@ -32,6 +28,9 @@ class BatchedInput(collections.namedtuple("BatchedInput",
 
 
 def get_src_vocab_size():
+    '''
+    :return: 训练数据中共有多少不重复的词。
+    '''
     size = 0
     with open(src_vocab_file, 'r') as vocab_file:
         for content in vocab_file.readlines():
@@ -182,7 +181,9 @@ def get_predict_iterator(src_vocab_table, vocab_size, batch_size, max_len=max_se
     batched_iter = batched_dataset.make_initializable_iterator()
     (src_ids, src_seq_len) = batched_iter.get_next()
 
-    fake_tag = tf.placeholder(tf.int32, [None, 10])
+    # 这里target_input在预测的时候不需要，但是不能返回None否则报错。这里则用个placeholder代替，但是仍然不会用到。
+    WAHTEVER = 10
+    fake_tag = tf.placeholder(tf.int32, [None, WAHTEVER])
     return BatchedInput(
         initializer=batched_iter.initializer,
         source=src_ids,
@@ -209,7 +210,6 @@ def load_word2vec_embedding(vocab_size):
             coefs = np.asarray(values[1:], dtype='float32')  # 取向量
         except ValueError:
             # 如果真的这个词出现在了训练数据里，这么做就会有潜在的bug。那coefs的值就是上一轮的值。
-            # 这个数据集中“蔚村”这个单词数据异常，但是词极少用到，所以可以忽略。
             print values[0], values[1:]
 
         embeddings[index] = coefs   # 将词和对应的向量存到字典里
@@ -244,6 +244,11 @@ def write_result_to_file(iterator, tags):
     print '*' * 100
 
 
+
+
+'''
+    以下是做测试用的，不用管。
+'''
 if __name__ == '__main__':
     #################### Just for testing #########################
     vocab_size = get_src_vocab_size()
