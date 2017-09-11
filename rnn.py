@@ -1,6 +1,4 @@
 # -*- coding: utf-8 -*
-# import os
-# os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 from tensorflow.contrib.rnn import DropoutWrapper
 from utils import *
 
@@ -100,16 +98,19 @@ def train(net, iterator, sess):
     print 'training finished!'
 
 
-def predict(net, iterator, sess):
+def predict(net, tag_table, sess):
     saver = tf.train.Saver()
     ckpt = tf.train.get_checkpoint_state(model_path)
-    if ckpt != None:
+    if ckpt is not None:
         path = ckpt.model_checkpoint_path
         print 'loading pre-trained model from %s.....' % path
         saver.restore(sess, path)
     else:
         print 'Model not found, please train your model first'
         return
+
+    file_iter = file_content_iterator(pred_file)
+
     while True:
         # batch等于1的时候本来就没有padding，如果批量预测的话，记得这里需要做长度的截取。
         try:
@@ -124,15 +125,14 @@ def predict(net, iterator, sess):
 
         viterbi_sequence, _ = tf.contrib.crf.viterbi_decode(
             tf_unary_scores, tf_transition_params)
-
+        tags = []
         for id in viterbi_sequence:
-            print id,
-        print
-
+            tags.append(sess.run(tag_table.lookup(tf.constant(id, dtype=tf.int64))))
+        write_result_to_file(file_iter, tags)
 
 
 if __name__ == '__main__':
-    action = 'train'
+    action = 'predict'
     vocab_size = get_src_vocab_size()
     src_unknown_id = tgt_unknown_id = vocab_size
     src_padding = vocab_size + 1
@@ -145,8 +145,10 @@ if __name__ == '__main__':
         iterator = get_iterator(src_vocab_table, tgt_vocab_table, vocab_size, BATCH_SIZE)
     elif action == 'predict':
         BATCH_SIZE = 1
+        DROPOUT_RATE = 1.0
         iterator = get_predict_iterator(src_vocab_table, vocab_size, BATCH_SIZE)
 
+    tag_table = tag_to_id_table()
     net = NER_net("ner", iterator, embedding, BATCH_SIZE)
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
@@ -156,7 +158,8 @@ if __name__ == '__main__':
         if action == 'train':
             train(net, iterator, sess)
         elif action == 'predict':
-            pass
+
+            predict(net, tag_table, sess)
 
 
 

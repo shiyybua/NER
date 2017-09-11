@@ -182,12 +182,13 @@ def get_predict_iterator(src_vocab_table, vocab_size, batch_size, max_len=max_se
     batched_iter = batched_dataset.make_initializable_iterator()
     (src_ids, src_seq_len) = batched_iter.get_next()
 
+    fake_tag = tf.placeholder(tf.int32, [None, 10])
     return BatchedInput(
         initializer=batched_iter.initializer,
         source=src_ids,
-        target_input=None,
+        target_input=fake_tag,
         source_sequence_length=src_seq_len,
-        target_sequence_length=None)
+        target_sequence_length=src_seq_len)
 
 
 def load_word2vec_embedding(vocab_size):
@@ -222,6 +223,27 @@ def load_word2vec_embedding(vocab_size):
                            initializer=tf.constant_initializer(embeddings), trainable=False)
 
 
+def tag_to_id_table():
+    return lookup_ops.index_to_string_table_from_file(
+        tgt_vocab_file, default_value='<tag-unknown>')
+
+
+def file_content_iterator(file_name):
+    with open(file_name, 'r') as f:
+        for line in f.readlines():
+            yield line.strip()
+
+
+def write_result_to_file(iterator, tags):
+    raw_content = next(iterator)
+    words = raw_content.split()
+    assert len(words) == len(tags)
+    for w,t in zip(words, tags):
+        print w, '(' + t + ')',
+    print
+    print '*' * 100
+
+
 if __name__ == '__main__':
     #################### Just for testing #########################
     vocab_size = get_src_vocab_size()
@@ -230,6 +252,8 @@ if __name__ == '__main__':
 
     src_vocab_table, tgt_vocab_table = create_vocab_tables(src_vocab_file, tgt_vocab_file, src_unknown_id, tgt_unknown_id)
     # iterator = get_iterator(src_vocab_table, tgt_vocab_table, vocab_size, 100, random_seed=None)
+    reverse_tgt_vocab_table = lookup_ops.index_to_string_table_from_file(
+        src_vocab_file, default_value='<tag-unknown>')
 
     iterator = get_predict_iterator(src_vocab_table, vocab_size, 1)
 
@@ -237,7 +261,11 @@ if __name__ == '__main__':
         sess.run(tf.global_variables_initializer())
         sess.run(iterator.initializer)
         tf.tables_initializer().run()
-        for i in range(100):
+
+        # 根据ID查字。
+        word = reverse_tgt_vocab_table.lookup(tf.constant(12001, dtype=tf.int64))
+        print sess.run(word)
+        for i in range(10):
             try:
                 # source, target = sess.run([iterator.source, iterator.target_input])
                 source = sess.run(iterator.source)

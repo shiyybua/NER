@@ -1,8 +1,18 @@
-import tensorflow as tf
-
-var = tf.Variable(0, dtype=tf.int32)
-
-with tf.Session() as sess:
-    sess.run(tf.global_variables_initializer())
-    var = tf.assign(var, 10)
-    print sess.run(var)
+def func():
+    with open('resource/predict.txt', 'r') as f:
+        for line in f.readlines():
+            yield line
+iter = func()
+try:
+    print next(iter)
+    print next(iter)
+    print next(iter)
+    print next(iter)
+    print next(iter)
+    print next(iter)
+    print next(iter)
+    print next(iter)
+    print next(iter)
+    print next(iter)
+except StopIteration:
+    pass
