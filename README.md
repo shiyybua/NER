@@ -8,4 +8,21 @@
 
 由于使用了新的API， Tensorflow版本必须大于1.2.0。
 
-程序在不断升级中尚未完全完成，但是当下版本已经是可运行版本。如有任何问题欢迎发送邮件： cww_hubei@126.com
+如何使用？
+    1. 安装tensorflow >= 1.2.0
+    2. 提供训练所需的数据，具体格式在resource文件夹里有展示。但是需要自行分词。只需提供3个文件：
+        source.txt target.txt 和 预训练的词向量。
+    3. 训练词向量，训练工具可以是gensim的word2vector或者glove等等，然后只需要训练出来的以vec结尾的文件。
+        具体格式是： 单词A: 0.001,0.001,0.001,....
+        如果用以上工具训练，格式不需要自行修改。程序默认embedding size是300, 可以按需求做更改
+        （注意：训练词向量的数据量越大越好，不只限于当前语聊，如果需要训练好的词向量可以联系我。）
+    4. 修改config.py里的文件存路径，所有的配置都在这个文件里。
+    5. 训练：修改config.py
+        tf.app.flags.DEFINE_string("action", 'train', "train | predict")
+        $ python rnn.py
+    6. 预测：修改config.py
+        tf.app.flags.DEFINE_string("action", 'predict', "train | predict")
+        $ python rnn.py
+
+
+程序在不断升级中。如有任何问题欢迎发送邮件： cww_hubei@126.com

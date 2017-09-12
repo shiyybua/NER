@@ -4,6 +4,7 @@ from tensorflow.python.ops import lookup_ops
 import numpy as np
 import collections
 import config
+import os
 
 src_file = config.FLAGS.src_file
 tgt_file = config.FLAGS.tgt_file
@@ -25,6 +26,47 @@ class BatchedInput(collections.namedtuple("BatchedInput",
                                            "source_sequence_length",
                                            "target_sequence_length"))):
   pass
+
+
+def build_word_index():
+    '''
+        生成单词列表，并存入文件之中。
+    :return:
+    '''
+    print 'building word index...'
+    if not os.path.exists(src_vocab_file):
+        with open(src_vocab_file, 'w') as source:
+            f = open(word_embedding_file)
+            for line in f:
+                values = line.split()
+                word = values[0]  # 取词
+                if type(word) is unicode:
+                    word = word.encode('utf8')
+                source.write(word + '\n')
+        f.close()
+    else:
+        print 'source vocabulary file has already existed, continue to next stage.'
+
+    if not os.path.exists(tgt_vocab_file):
+        with open(tgt_file, 'r') as source:
+            dict_word = {}
+            # with open('source_vocab', 'w') as s_vocab:
+            for line in source.readlines():
+                line = line.strip()
+                if line != '':
+                    word_arr = line.split()
+                    for w in word_arr:
+                        dict_word[w] = dict_word.get(w, 0) + 1
+
+            top_words = sorted(dict_word.items(), key=lambda s: s[1], reverse=True)
+            with open(tgt_vocab_file, 'w') as s_vocab:
+                for word, frequence in top_words:
+                    s_vocab.write(word + '\n')
+    else:
+        print 'target vocabulary file has already existed, continue to next stage.'
+
+    if not os.path.exists(model_path):
+        os.makedirs(model_path)
 
 
 def get_src_vocab_size():
@@ -54,7 +96,7 @@ def get_class_size():
     # 最后一个是padding
     return size + 1
 
-TAG_PADDING_ID = get_class_size() - 1
+
 
 def create_vocab_tables(src_vocab_file, tgt_vocab_file, src_unknown_id, tgt_unknown_id, share_vocab=False):
   src_vocab_table = lookup_ops.index_table_from_file(
@@ -242,6 +284,10 @@ def write_result_to_file(iterator, tags):
         print w, '(' + t + ')',
     print
     print '*' * 100
+
+
+build_word_index()
+TAG_PADDING_ID = get_class_size() - 1
 
 
 

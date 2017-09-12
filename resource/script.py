@@ -79,4 +79,4 @@ def tokenizer():
             f.write(line + '\n')
 
 
-tokenizer()
+build_word_index_from_w2v()

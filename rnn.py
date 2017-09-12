@@ -140,6 +140,7 @@ def predict(net, tag_table, sess):
 
 
 if __name__ == '__main__':
+
     action = config.FLAGS.action
     # 获取词的总数。
     vocab_size = get_src_vocab_size()
