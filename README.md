@@ -31,4 +31,4 @@
         $ python rnn.py
 
 
-程序在不断升级中。如有任何问题欢迎发送邮件： cww_hubei@126.com
+如有任何问题欢迎发送邮件： cww_hubei@126.com
