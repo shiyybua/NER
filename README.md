@@ -37,4 +37,4 @@
         $ python rnn.py
 
 
-如有任何问题欢迎发送邮件： cww_hubei@126.com
+如有任何问题欢迎发送邮件： shiyybua@126.com
