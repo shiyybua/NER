@@ -36,5 +36,5 @@
         tf.app.flags.DEFINE_string("action", 'predict', "train | predict")
         $ python rnn.py
 
-
+更多文件、问题见issues.
 如有任何问题欢迎发送邮件： shiyybua@126.com
