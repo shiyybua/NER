@@ -33,10 +33,14 @@ def build_word_index():
         生成单词列表，并存入文件之中。
     :return:
     '''
+    if not os.path.exists(word_embedding_file):
+        print 'word embedding file does not exist, please check your file path '
+        return
+
     print 'building word index...'
     if not os.path.exists(src_vocab_file):
         with open(src_vocab_file, 'w') as source:
-            f = open(word_embedding_file)
+            f = open(word_embedding_file, 'r')
             for line in f:
                 values = line.split()
                 word = values[0]  # 取词
@@ -116,9 +120,12 @@ def get_iterator(src_vocab_table, tgt_vocab_table, vocab_size, batch_size, buffe
         # https://github.com/tensorflow/tensorflow/issues/12414
         buffer_size = batch_size * 10
 
-    src_dataset = tf.contrib.data.TextLineDataset(src_file)
-    tgt_dataset = tf.contrib.data.TextLineDataset(tgt_file)
-    src_tgt_dataset = tf.contrib.data.Dataset.zip((src_dataset, tgt_dataset))
+    # src_dataset = tf.contrib.data.TextLineDataset(src_file)
+    # tgt_dataset = tf.contrib.data.TextLineDataset(tgt_file)
+
+    src_dataset = tf.data.TextLineDataset(src_file)
+    tgt_dataset = tf.data.TextLineDataset(tgt_file)
+    src_tgt_dataset = tf.data.Dataset.zip((src_dataset, tgt_dataset))
 
     src_tgt_dataset = src_tgt_dataset.shuffle(
         buffer_size, random_seed)
@@ -126,8 +133,8 @@ def get_iterator(src_vocab_table, tgt_vocab_table, vocab_size, batch_size, buffe
     src_tgt_dataset = src_tgt_dataset.map(
         lambda src, tgt: (
             tf.string_split([src]).values, tf.string_split([tgt]).values),
-        num_threads=num_threads,
-        output_buffer_size=buffer_size)
+        num_parallel_calls=num_threads)
+    src_tgt_dataset.prefetch(buffer_size)
 
     # src_tgt_dataset = src_tgt_dataset.filter(
     #     lambda src, tgt: tf.logical_and(tf.size(src) > 0, tf.size(tgt) > 0))
@@ -135,25 +142,25 @@ def get_iterator(src_vocab_table, tgt_vocab_table, vocab_size, batch_size, buffe
     if src_max_len:
         src_tgt_dataset = src_tgt_dataset.map(
             lambda src, tgt: (src[:src_max_len], tgt),
-            num_threads=num_threads,
-            output_buffer_size=buffer_size)
+            num_parallel_calls=num_threads)
+        src_tgt_dataset.prefetch(buffer_size)
     if tgt_max_len:
         src_tgt_dataset = src_tgt_dataset.map(
             lambda src, tgt: (src, tgt[:tgt_max_len]),
-            num_threads=num_threads,
-            output_buffer_size=buffer_size)
+            num_parallel_calls=num_threads)
+        src_tgt_dataset.prefetch(buffer_size)
 
     src_tgt_dataset = src_tgt_dataset.map(
         lambda src, tgt: (tf.cast(src_vocab_table.lookup(src), tf.int32),
                           tf.cast(tgt_vocab_table.lookup(tgt), tf.int32)),
-        num_threads=num_threads, output_buffer_size=buffer_size)
+        num_parallel_calls=num_threads)
+    src_tgt_dataset.prefetch(buffer_size)
 
     src_tgt_dataset = src_tgt_dataset.map(
         lambda src, tgt_in: (
             src, tgt_in, tf.size(src), tf.size(tgt_in)),
-        num_threads=num_threads,
-        output_buffer_size=buffer_size)
-
+        num_parallel_calls=num_threads)
+    src_tgt_dataset.prefetch(buffer_size)
     def batching_func(x):
         return x.padded_batch(
             batch_size,
@@ -184,9 +191,9 @@ def get_iterator(src_vocab_table, tgt_vocab_table, vocab_size, batch_size, buffe
     def reduce_func(unused_key, windowed_data):
         return batching_func(windowed_data)
 
-    batched_dataset = src_tgt_dataset.group_by_window(
-        key_func=key_func, reduce_func=reduce_func, window_size=batch_size)
-
+    batched_dataset = src_tgt_dataset.apply(tf.contrib.data.group_by_window(
+        key_func=key_func, reduce_func=reduce_func, window_size=batch_size
+    ))
     batched_iter = batched_dataset.make_initializable_iterator()
     (src_ids, tgt_input_ids, src_seq_len, tgt_seq_len) = (
         batched_iter.get_next())
