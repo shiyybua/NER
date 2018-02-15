@@ -6,11 +6,11 @@
 
 该程序使用Tensorflow完成，使用了当前较新的DataSet API，使数据预处理和feed更优雅。
 
-由于使用了新的API， Tensorflow版本必须大于1.2.0。
+由于使用了新的API， Tensorflow版本必须大于1.2.0，代码升级后使用的是TensorFlow1.4，不确定原来Tensorflow1.2是否还兼容。
 
 如何使用？
 
-    1. 安装tensorflow >= 1.2.0
+    1. 建议安装tensorflow >= 1.4.1
     
     2. 提供训练所需的数据，具体格式在resource文件夹里有展示。但是需要自行分词。只需提供3个文件：
         source.txt target.txt 和 预训练的词向量。
