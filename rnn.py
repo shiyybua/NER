@@ -100,7 +100,8 @@ def train(net, iterator, sess):
         except tf.errors.OutOfRangeError:
             sess.run(iterator.initializer)
         except tf.errors.InvalidArgumentError:
-            print current_epoch, ' iterator.next() cannot get enough data to a batch, initialize it.'
+            # iterator.next() cannot get enough data to a batch, initialize it.
+            # 正常初始化流程
             sess.run(iterator.initializer)
     print 'training finished!'
 
@@ -173,7 +174,3 @@ if __name__ == '__main__':
         elif action == 'predict':
 
             predict(net, tag_table, sess)
-
-
-
-
