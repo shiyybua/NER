@@ -35,6 +35,7 @@
     6. 预测：修改config.py
         tf.app.flags.DEFINE_string("action", 'predict', "train | predict")
         $ python rnn.py
+
 注意：
     原本resource文件中只包含predict.txt, source.txt, target.txt, 如果更换自己的词向量文件记得删除其他自动生成的文件。
 
